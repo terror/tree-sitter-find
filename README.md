@@ -11,3 +11,12 @@ which implements a single method
 capable of parsing and executing a rich query syntax for grabbing information
 off of a
 [`Node`](https://docs.rs/tree-sitter/latest/tree_sitter/struct.Node.html).
+
+## Installation
+
+You can add `tsql` to your project using [cargo](https://doc.rust-lang.org/cargo/index.html),
+the Rust package manager:
+
+```
+cargo add tsql
+```

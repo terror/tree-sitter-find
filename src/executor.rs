@@ -185,7 +185,8 @@ mod tests {
 
     let root = tree.root_node();
 
-    let results = Executor::execute(&root, &Query::Kind("function_item".into()));
+    let results =
+      Executor::execute(&root, &Query::Kind("function_item".into()));
 
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].kind(), "function_item");
