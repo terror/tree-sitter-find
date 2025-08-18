@@ -1,5 +1,7 @@
 ## tsql
 
+[![CI](https://github.com/terror/tsql/actions/workflows/ci.yaml/badge.svg)](https://github.com/terror/tsql/actions/workflows/ci.yaml)
+
 **tsql** is a syntax for querying data off of a tree-sitter
 [`Node`](https://docs.rs/tree-sitter/latest/tree_sitter/struct.Node.html)
 instance.
