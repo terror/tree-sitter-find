@@ -67,7 +67,7 @@ impl Executor {
         let child_results = Self::execute(&child, inner);
 
         if !child_results.is_empty() && child_results[0] == child {
-          results.extend(child_results);
+          results.push(child);
         }
       }
     }
@@ -161,6 +161,10 @@ impl Executor {
 mod tests {
   use {super::*, indoc::indoc, tree_sitter::Tree};
 
+  fn parse(query: &str) -> Query {
+    Parser::parse(Lexer::lex(query)).unwrap()
+  }
+
   fn tree(input: &str) -> Tree {
     let mut parser = tree_sitter::Parser::new();
 
@@ -183,12 +187,48 @@ mod tests {
 
     let tree = tree(program);
 
-    let root = tree.root_node();
+    let nodes = Executor::execute(&tree.root_node(), &parse("function_item"));
 
-    let results =
-      Executor::execute(&root, &Query::Kind("function_item".into()));
+    assert_eq!(nodes.first().unwrap().start_byte(), 0);
+  }
 
-    assert_eq!(results.len(), 1);
-    assert_eq!(results[0].kind(), "function_item");
+  #[test]
+  fn query_by_index() {
+    let program = indoc! {"
+      fn main() {
+        let x = 5;
+        let y = 10;
+        println!(\"{}\", x + y);
+      }
+    "};
+
+    let tree = tree(program);
+
+    let nodes =
+      Executor::execute(&tree.root_node(), &parse("let_declaration[0]"));
+
+    let text = nodes
+      .first()
+      .unwrap()
+      .utf8_text(program.as_bytes())
+      .unwrap();
+
+    assert_eq!(text, "let x = 5;");
+
+    let nodes =
+      Executor::execute(&tree.root_node(), &parse("let_declaration[1]"));
+
+    let text = nodes
+      .first()
+      .unwrap()
+      .utf8_text(program.as_bytes())
+      .unwrap();
+
+    assert_eq!(text, "let y = 10;");
+
+    let nodes =
+      Executor::execute(&tree.root_node(), &parse("let_declaration[2]"));
+
+    assert_eq!(nodes.len(), 0);
   }
 }
