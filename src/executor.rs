@@ -5,23 +5,19 @@ pub(crate) struct Executor;
 impl Executor {
   pub(crate) fn execute<'a>(
     node: &Node<'a>,
-    selector: &Selector,
+    selector: &Query,
   ) -> Vec<Node<'a>> {
     match selector {
-      Selector::Child { parent, child } => {
-        Self::find_child(node, parent, child)
-      }
-      Selector::Descendant {
+      Query::Child { parent, child } => Self::find_child(node, parent, child),
+      Query::Descendant {
         ancestor,
         descendant,
       } => Self::find_descendant(node, ancestor, descendant),
-      Selector::DirectChild(inner) => Self::find_direct_child(node, inner),
-      Selector::Index { kind, index } => {
-        Self::find_by_index(node, kind, *index)
-      }
-      Selector::Kind(kind) => Self::find_by_kind(node, kind),
-      Selector::Position(pos) => Self::find_by_position(node, *pos),
-      Selector::Union(selectors) => Self::find_union(node, selectors),
+      Query::DirectChild(inner) => Self::find_direct_child(node, inner),
+      Query::Index { kind, index } => Self::find_by_index(node, kind, *index),
+      Query::Kind(kind) => Self::find_by_kind(node, kind),
+      Query::Position(pos) => Self::find_by_position(node, *pos),
+      Query::Union(selectors) => Self::find_union(node, selectors),
     }
   }
 
@@ -63,7 +59,7 @@ impl Executor {
     }
   }
 
-  fn find_direct_child<'a>(node: &Node<'a>, inner: &Selector) -> Vec<Node<'a>> {
+  fn find_direct_child<'a>(node: &Node<'a>, inner: &Query) -> Vec<Node<'a>> {
     let mut results = Vec::new();
 
     for i in 0..node.child_count() {
@@ -81,8 +77,8 @@ impl Executor {
 
   fn find_child<'a>(
     node: &Node<'a>,
-    parent: &Selector,
-    child: &Selector,
+    parent: &Query,
+    child: &Query,
   ) -> Vec<Node<'a>> {
     let mut results = Vec::new();
 
@@ -97,7 +93,7 @@ impl Executor {
 
   fn find_direct_children<'a>(
     node: &Node<'a>,
-    selector: &Selector,
+    selector: &Query,
   ) -> Vec<Node<'a>> {
     let mut results = Vec::new();
 
@@ -118,8 +114,8 @@ impl Executor {
 
   fn find_descendant<'a>(
     node: &Node<'a>,
-    ancestor: &Selector,
-    descendant: &Selector,
+    ancestor: &Query,
+    descendant: &Query,
   ) -> Vec<Node<'a>> {
     let mut results = Vec::new();
 
@@ -132,7 +128,7 @@ impl Executor {
     results
   }
 
-  fn find_union<'a>(node: &Node<'a>, selectors: &[Selector]) -> Vec<Node<'a>> {
+  fn find_union<'a>(node: &Node<'a>, selectors: &[Query]) -> Vec<Node<'a>> {
     let mut results = Vec::new();
 
     for selector in selectors {

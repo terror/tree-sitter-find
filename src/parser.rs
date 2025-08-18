@@ -30,45 +30,45 @@ impl Parser {
     token
   }
 
-  pub(crate) fn parse(input: Vec<Token>) -> Result<Selector, ParseError> {
+  pub(crate) fn parse(input: Vec<Token>) -> Result<Query, ParseError> {
     let mut parser = Self::new(input);
-    parser.parse_union_selector()
+    parser.parse_union_query()
   }
 
-  fn parse_union_selector(&mut self) -> Result<Selector, ParseError> {
-    let mut selectors = vec![self.parse_hierarchical_selector()?];
+  fn parse_union_query(&mut self) -> Result<Query, ParseError> {
+    let mut selectors = vec![self.parse_hierarchical_query()?];
 
     while let Some(Token::Comma) = self.current_token() {
       self.advance();
-      selectors.push(self.parse_hierarchical_selector()?);
+      selectors.push(self.parse_hierarchical_query()?);
     }
 
     if selectors.len() == 1 {
       Ok(selectors.into_iter().next().unwrap())
     } else {
-      Ok(Selector::Union(selectors))
+      Ok(Query::Union(selectors))
     }
   }
 
-  fn parse_hierarchical_selector(&mut self) -> Result<Selector, ParseError> {
-    let mut left = self.parse_simple_selector()?;
+  fn parse_hierarchical_query(&mut self) -> Result<Query, ParseError> {
+    let mut left = self.parse_simple_query()?;
 
     loop {
       match self.current_token() {
         Some(Token::Greater) => {
           self.advance();
 
-          let right = self.parse_simple_selector()?;
+          let right = self.parse_simple_query()?;
 
-          left = Selector::Child {
+          left = Query::Child {
             parent: Box::new(left),
             child: Box::new(right),
           };
         }
         Some(Token::Kind(_)) | Some(Token::Caret) | Some(Token::At) => {
-          let right = self.parse_simple_selector()?;
+          let right = self.parse_simple_query()?;
 
-          left = Selector::Descendant {
+          left = Query::Descendant {
             ancestor: Box::new(left),
             descendant: Box::new(right),
           };
@@ -80,18 +80,17 @@ impl Parser {
     Ok(left)
   }
 
-  fn parse_simple_selector(&mut self) -> Result<Selector, ParseError> {
+  fn parse_simple_query(&mut self) -> Result<Query, ParseError> {
     match self.current_token() {
       Some(Token::Caret) => {
         self.advance();
-        let inner = self.parse_simple_selector()?;
-        Ok(Selector::DirectChild(Box::new(inner)))
+        Ok(Query::DirectChild(Box::new(self.parse_simple_query()?)))
       }
       Some(Token::At) => {
         self.advance();
 
-        if let Some(Token::Number(pos)) = self.advance() {
-          Ok(Selector::Position(pos))
+        if let Some(Token::Number(position)) = self.advance() {
+          Ok(Query::Position(position))
         } else {
           Err(ParseError::UnexpectedToken)
         }
@@ -106,7 +105,7 @@ impl Parser {
 
           if let Some(Token::Number(index)) = self.advance() {
             if let Some(Token::RightBracket) = self.advance() {
-              Ok(Selector::Index { kind, index })
+              Ok(Query::Index { kind, index })
             } else {
               Err(ParseError::UnexpectedToken)
             }
@@ -114,7 +113,7 @@ impl Parser {
             Err(ParseError::InvalidIndex)
           }
         } else {
-          Ok(Selector::Kind(kind))
+          Ok(Query::Kind(kind))
         }
       }
       _ => Err(ParseError::UnexpectedToken),
@@ -126,17 +125,17 @@ impl Parser {
 mod tests {
   use super::*;
 
-  fn selector<'a>(input: &'a str) -> Selector {
+  fn query<'a>(input: &'a str) -> Query {
     Parser::parse(Lexer::lex(input)).unwrap()
   }
 
   #[test]
   fn child() {
     assert_eq!(
-      selector("object > string"),
-      Selector::Child {
-        child: Box::new(Selector::Kind("string".to_string())),
-        parent: Box::new(Selector::Kind("object".to_string()))
+      query("object > string"),
+      Query::Child {
+        child: Box::new(Query::Kind("string".to_string())),
+        parent: Box::new(Query::Kind("object".to_string()))
       }
     );
   }
@@ -144,10 +143,10 @@ mod tests {
   #[test]
   fn descendant() {
     assert_eq!(
-      selector("object string"),
-      Selector::Descendant {
-        ancestor: Box::new(Selector::Kind("object".to_string())),
-        descendant: Box::new(Selector::Kind("string".to_string()))
+      query("object string"),
+      Query::Descendant {
+        ancestor: Box::new(Query::Kind("object".to_string())),
+        descendant: Box::new(Query::Kind("string".to_string()))
       }
     );
   }
@@ -155,16 +154,16 @@ mod tests {
   #[test]
   fn direct_child() {
     assert_eq!(
-      selector("^string"),
-      Selector::DirectChild(Box::new(Selector::Kind("string".to_string())))
+      query("^string"),
+      Query::DirectChild(Box::new(Query::Kind("string".to_string())))
     );
   }
 
   #[test]
   fn index() {
     assert_eq!(
-      selector("string[2]"),
-      Selector::Index {
+      query("string[2]"),
+      Query::Index {
         index: 2,
         kind: "string".to_string(),
       }
@@ -173,21 +172,21 @@ mod tests {
 
   #[test]
   fn kind() {
-    assert_eq!(selector("string"), Selector::Kind("string".to_string()));
+    assert_eq!(query("string"), Query::Kind("string".to_string()));
   }
 
   #[test]
   fn position() {
-    assert_eq!(selector("@1"), Selector::Position(1));
+    assert_eq!(query("@1"), Query::Position(1));
   }
 
   #[test]
   fn union() {
     assert_eq!(
-      selector("string, number"),
-      Selector::Union(vec![
-        Selector::Kind("string".to_string()),
-        Selector::Kind("number".to_string())
+      query("string, number"),
+      Query::Union(vec![
+        Query::Kind("string".to_string()),
+        Query::Kind("number".to_string())
       ])
     );
   }
