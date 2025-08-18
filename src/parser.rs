@@ -20,25 +20,24 @@ impl Parser {
     }
   }
 
-  fn current_token(&self) -> Option<&Token> {
-    self.input.get(self.position)
-  }
-
   fn advance(&mut self) -> Option<Token> {
-    let token = self.current_token().cloned();
+    let token = self.token().cloned();
     self.position += 1;
     token
   }
 
+  fn token(&self) -> Option<&Token> {
+    self.input.get(self.position)
+  }
+
   pub(crate) fn parse(input: Vec<Token>) -> Result<Query, ParseError> {
-    let mut parser = Self::new(input);
-    parser.parse_union_query()
+    Self::new(input).parse_union_query()
   }
 
   fn parse_union_query(&mut self) -> Result<Query, ParseError> {
     let mut selectors = vec![self.parse_hierarchical_query()?];
 
-    while let Some(Token::Comma) = self.current_token() {
+    while let Some(Token::Comma) = self.token() {
       self.advance();
       selectors.push(self.parse_hierarchical_query()?);
     }
@@ -54,23 +53,19 @@ impl Parser {
     let mut left = self.parse_simple_query()?;
 
     loop {
-      match self.current_token() {
+      match self.token() {
         Some(Token::Greater) => {
           self.advance();
 
-          let right = self.parse_simple_query()?;
-
           left = Query::Child {
             parent: Box::new(left),
-            child: Box::new(right),
+            child: Box::new(self.parse_simple_query()?),
           };
         }
         Some(Token::Kind(_)) | Some(Token::Caret) | Some(Token::At) => {
-          let right = self.parse_simple_query()?;
-
           left = Query::Descendant {
             ancestor: Box::new(left),
-            descendant: Box::new(right),
+            descendant: Box::new(self.parse_simple_query()?),
           };
         }
         _ => break,
@@ -81,7 +76,7 @@ impl Parser {
   }
 
   fn parse_simple_query(&mut self) -> Result<Query, ParseError> {
-    match self.current_token() {
+    match self.token() {
       Some(Token::Caret) => {
         self.advance();
         Ok(Query::DirectChild(Box::new(self.parse_simple_query()?)))
@@ -100,7 +95,7 @@ impl Parser {
 
         self.advance();
 
-        if let Some(Token::LeftBracket) = self.current_token() {
+        if let Some(Token::LeftBracket) = self.token() {
           self.advance();
 
           if let Some(Token::Number(index)) = self.advance() {
@@ -187,6 +182,34 @@ mod tests {
       Query::Union(vec![
         Query::Kind("string".to_string()),
         Query::Kind("number".to_string())
+      ])
+    );
+  }
+
+  #[test]
+  fn union_query_with_descendant_and_direct_child() {
+    assert_eq!(
+      query("object > array[0] string @ 2, ^number > boolean"),
+      Query::Union(vec![
+        Query::Descendant {
+          ancestor: Box::new(Query::Descendant {
+            ancestor: Box::new(Query::Child {
+              parent: Box::new(Query::Kind("object".to_string())),
+              child: Box::new(Query::Index {
+                kind: "array".to_string(),
+                index: 0,
+              }),
+            }),
+            descendant: Box::new(Query::Kind("string".to_string())),
+          }),
+          descendant: Box::new(Query::Position(2)),
+        },
+        Query::Child {
+          parent: Box::new(Query::DirectChild(Box::new(Query::Kind(
+            "number".to_string()
+          )))),
+          child: Box::new(Query::Kind("boolean".to_string())),
+        },
       ])
     );
   }
