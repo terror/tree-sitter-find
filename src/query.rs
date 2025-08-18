@@ -4,6 +4,7 @@ pub(crate) enum Query {
     child: Box<Query>,
     parent: Box<Query>,
   },
+  Current,
   Descendant {
     ancestor: Box<Query>,
     descendant: Box<Query>,

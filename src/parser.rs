@@ -43,7 +43,25 @@ impl Parser {
   }
 
   fn parse_hierarchical_query(&mut self) -> Result<Query, Error> {
-    let mut left = self.parse_simple_query()?;
+    let mut left = match self.token() {
+      Some(Token::Greater) => {
+        self.advance();
+
+        Query::Child {
+          parent: Box::new(Query::Current),
+          child: Box::new(self.parse_simple_query()?),
+        }
+      }
+      Some(Token::Less) => {
+        self.advance();
+
+        Query::Parent {
+          child: Box::new(Query::Current),
+          parent: Box::new(self.parse_simple_query()?),
+        }
+      }
+      _ => self.parse_simple_query()?,
+    };
 
     loop {
       match self.token() {
@@ -223,6 +241,28 @@ mod tests {
           child: Box::new(Query::Kind("boolean".to_string())),
         },
       ])
+    );
+  }
+
+  #[test]
+  fn child_with_implicit_current() {
+    assert_eq!(
+      query("> string"),
+      Query::Child {
+        parent: Box::new(Query::Current),
+        child: Box::new(Query::Kind("string".to_string()))
+      }
+    );
+  }
+
+  #[test]
+  fn parent_with_implicit_current() {
+    assert_eq!(
+      query("< object"),
+      Query::Parent {
+        child: Box::new(Query::Current),
+        parent: Box::new(Query::Kind("object".to_string()))
+      }
     );
   }
 

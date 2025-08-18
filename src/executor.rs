@@ -9,6 +9,7 @@ impl Executor {
   ) -> Vec<Node<'a>> {
     match selector {
       Query::Child { parent, child } => Self::child(node, parent, child),
+      Query::Current => vec![*node],
       Query::Descendant {
         ancestor,
         descendant,
@@ -276,5 +277,54 @@ mod tests {
       nodes[1].utf8_text(program.as_bytes()).unwrap(),
       "let y = 10;"
     );
+  }
+
+  #[test]
+  fn query_child_with_implicit_current() {
+    let program = indoc! {"
+      fn main() {
+        let x = 5;
+      }
+    "};
+
+    let tree = tree(program);
+
+    let block_nodes = Executor::execute(&tree.root_node(), &parse("block"));
+
+    assert_eq!(block_nodes.len(), 1);
+
+    let nodes = Executor::execute(
+      &block_nodes.first().unwrap(),
+      &parse("> let_declaration"),
+    );
+
+    assert_eq!(nodes.len(), 1);
+
+    assert_eq!(
+      nodes[0].utf8_text(program.as_bytes()).unwrap(),
+      "let x = 5;"
+    );
+  }
+
+  #[test]
+  fn query_parent_with_implicit_current() {
+    let program = indoc! {"
+      fn main() {
+        let x = 5;
+      }
+    "};
+
+    let tree = tree(program);
+
+    let let_nodes =
+      Executor::execute(&tree.root_node(), &parse("let_declaration"));
+
+    assert_eq!(let_nodes.len(), 1);
+
+    let nodes =
+      Executor::execute(&let_nodes.first().unwrap(), &parse("< block"));
+
+    assert_eq!(nodes.len(), 1);
+    assert_eq!(nodes[0].kind(), "block");
   }
 }
