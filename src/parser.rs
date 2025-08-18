@@ -1,12 +1,5 @@
 use super::*;
 
-#[derive(Debug)]
-pub enum ParseError {
-  InvalidIndex,
-  UnexpectedEnd,
-  UnexpectedToken,
-}
-
 pub(crate) struct Parser {
   input: Vec<Token>,
   position: usize,
@@ -30,11 +23,11 @@ impl Parser {
     self.input.get(self.position)
   }
 
-  pub(crate) fn parse(input: Vec<Token>) -> Result<Query, ParseError> {
+  pub(crate) fn parse(input: Vec<Token>) -> Result<Query, Error> {
     Self::new(input).parse_union_query()
   }
 
-  fn parse_union_query(&mut self) -> Result<Query, ParseError> {
+  fn parse_union_query(&mut self) -> Result<Query, Error> {
     let mut selectors = vec![self.parse_hierarchical_query()?];
 
     while let Some(Token::Comma) = self.token() {
@@ -49,7 +42,7 @@ impl Parser {
     }
   }
 
-  fn parse_hierarchical_query(&mut self) -> Result<Query, ParseError> {
+  fn parse_hierarchical_query(&mut self) -> Result<Query, Error> {
     let mut left = self.parse_simple_query()?;
 
     loop {
@@ -75,7 +68,7 @@ impl Parser {
     Ok(left)
   }
 
-  fn parse_simple_query(&mut self) -> Result<Query, ParseError> {
+  fn parse_simple_query(&mut self) -> Result<Query> {
     match self.token() {
       Some(Token::Caret) => {
         self.advance();
@@ -87,7 +80,7 @@ impl Parser {
         if let Some(Token::Number(position)) = self.advance() {
           Ok(Query::Position(position))
         } else {
-          Err(ParseError::UnexpectedToken)
+          Err(Error::UnexpectedToken)
         }
       }
       Some(Token::Kind(kind)) => {
@@ -102,16 +95,16 @@ impl Parser {
             if let Some(Token::RightBracket) = self.advance() {
               Ok(Query::Index { kind, index })
             } else {
-              Err(ParseError::UnexpectedToken)
+              Err(Error::UnexpectedToken)
             }
           } else {
-            Err(ParseError::InvalidIndex)
+            Err(Error::InvalidIndex)
           }
         } else {
           Ok(Query::Kind(kind))
         }
       }
-      _ => Err(ParseError::UnexpectedToken),
+      _ => Err(Error::UnexpectedToken),
     }
   }
 }
