@@ -16,6 +16,7 @@ impl Executor {
       Query::DirectChild(inner) => Self::direct_child(node, inner),
       Query::Index { kind, index } => Self::index(node, kind, *index),
       Query::Kind(kind) => Self::kind(node, kind),
+      Query::Parent { child, parent } => Self::parent(node, child, parent),
       Query::Position(pos) => Self::position(node, *pos),
       Query::Union(selectors) => Self::union(node, selectors),
     }
@@ -101,6 +102,28 @@ impl Executor {
     } else {
       Vec::new()
     }
+  }
+
+  fn parent<'a>(
+    node: &Node<'a>,
+    child: &Query,
+    parent: &Query,
+  ) -> Vec<Node<'a>> {
+    let mut results = Vec::new();
+
+    let child_matches = Self::execute(node, child);
+
+    for child_node in child_matches {
+      if let Some(parent_node) = child_node.parent() {
+        let parent_results = Self::execute(&parent_node, parent);
+
+        if !parent_results.is_empty() && parent_results[0] == parent_node {
+          results.push(parent_node);
+        }
+      }
+    }
+
+    Self::deduplicate_and_sort(results)
   }
 
   fn union<'a>(node: &Node<'a>, selectors: &[Query]) -> Vec<Node<'a>> {
@@ -223,5 +246,35 @@ mod tests {
       Executor::execute(&tree.root_node(), &parse("let_declaration[2]"));
 
     assert_eq!(nodes.len(), 0);
+  }
+
+  #[test]
+  fn query_parent() {
+    let program = indoc! {"
+      fn main() {
+        let x = 5;
+        let y = 10;
+        println!(\"{}\", x + y);
+      }
+    "};
+
+    let tree = tree(program);
+
+    let nodes = Executor::execute(
+      &tree.root_node(),
+      &parse("identifier < let_declaration"),
+    );
+
+    assert_eq!(nodes.len(), 2);
+
+    assert_eq!(
+      nodes[0].utf8_text(program.as_bytes()).unwrap(),
+      "let x = 5;"
+    );
+
+    assert_eq!(
+      nodes[1].utf8_text(program.as_bytes()).unwrap(),
+      "let y = 10;"
+    );
   }
 }

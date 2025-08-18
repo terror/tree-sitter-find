@@ -47,6 +47,10 @@ impl<'a> Lexer<'a> {
             lexer.advance();
             tokens.push(Token::Greater);
           }
+          '<' => {
+            lexer.advance();
+            tokens.push(Token::Less);
+          }
           '^' => {
             lexer.advance();
             tokens.push(Token::Caret);
@@ -127,6 +131,18 @@ mod tests {
         Token::RightBracket,
         Token::Greater,
         Token::Kind("identifier".to_string()),
+      ]
+    );
+  }
+
+  #[test]
+  fn parent_token() {
+    assert_eq!(
+      Lexer::lex("identifier < recipe").unwrap(),
+      vec![
+        Token::Kind("identifier".to_string()),
+        Token::Less,
+        Token::Kind("recipe".to_string()),
       ]
     );
   }

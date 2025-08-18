@@ -14,6 +14,10 @@ pub(crate) enum Query {
     kind: String,
   },
   Kind(String),
+  Parent {
+    child: Box<Query>,
+    parent: Box<Query>,
+  },
   Position(usize),
   Union(Vec<Query>),
 }

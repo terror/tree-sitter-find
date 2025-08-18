@@ -55,6 +55,14 @@ impl Parser {
             child: Box::new(self.parse_simple_query()?),
           };
         }
+        Some(Token::Less) => {
+          self.advance();
+
+          left = Query::Parent {
+            child: Box::new(left),
+            parent: Box::new(self.parse_simple_query()?),
+          };
+        }
         Some(Token::Kind(_)) | Some(Token::Caret) | Some(Token::At) => {
           left = Query::Descendant {
             ancestor: Box::new(left),
@@ -122,6 +130,17 @@ mod tests {
     assert_eq!(
       query("object > string"),
       Query::Child {
+        child: Box::new(Query::Kind("string".to_string())),
+        parent: Box::new(Query::Kind("object".to_string()))
+      }
+    );
+  }
+
+  #[test]
+  fn parent() {
+    assert_eq!(
+      query("string < object"),
+      Query::Parent {
         child: Box::new(Query::Kind("string".to_string())),
         parent: Box::new(Query::Kind("object".to_string()))
       }
