@@ -156,3 +156,38 @@ impl Executor {
     nodes
   }
 }
+
+#[cfg(test)]
+mod tests {
+  use {super::*, indoc::indoc, tree_sitter::Tree};
+
+  fn tree(input: &str) -> Tree {
+    let mut parser = tree_sitter::Parser::new();
+
+    parser
+      .set_language(&tree_sitter_rust::LANGUAGE.into())
+      .unwrap();
+
+    parser.parse(input, None).unwrap()
+  }
+
+  #[test]
+  fn query_by_kind() {
+    let program = indoc! {"
+      fn main() {
+        let x = 5;
+        let y = 10;
+        println!(\"{}\", x + y);
+      }
+    "};
+
+    let tree = tree(program);
+
+    let root = tree.root_node();
+
+    let results = Executor::execute(&root, &Query::Kind("function_item".into()));
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].kind(), "function_item");
+  }
+}
