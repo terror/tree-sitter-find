@@ -113,7 +113,7 @@ impl Parser {
 mod tests {
   use super::*;
 
-  fn query<'a>(input: &'a str) -> Query {
+  fn query(input: &str) -> Query {
     Parser::parse(Lexer::lex(input).unwrap()).unwrap()
   }
 

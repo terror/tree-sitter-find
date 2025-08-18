@@ -24,7 +24,7 @@ ci: test clippy forbid
 
 [group: 'check']
 clippy:
-  cargo clippy --all --all-targets
+  cargo clippy --workspace --all-targets -- --deny warnings
 
 [group: 'format']
 fmt:
