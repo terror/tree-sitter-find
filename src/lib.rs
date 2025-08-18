@@ -1,14 +1,25 @@
-pub fn add(left: u64, right: u64) -> u64 {
-  left + right
+use {
+  executor::Executor, lexer::Lexer, parser::Parser, selector::Selector,
+  token::Token, tree_sitter::Node,
+};
+
+mod executor;
+mod lexer;
+mod parser;
+mod selector;
+mod token;
+
+pub use parser::ParseError;
+
+pub trait NodeExt {
+  fn find(&self, selector: &str) -> Result<Vec<Node<'_>>, ParseError>;
 }
 
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn it_works() {
-    let result = add(2, 2);
-    assert_eq!(result, 4);
+impl NodeExt for Node<'_> {
+  fn find(&self, selector: &str) -> Result<Vec<Node<'_>>, ParseError> {
+    Ok(Executor::execute(
+      self,
+      &Parser::parse(Lexer::lex(selector))?,
+    ))
   }
 }

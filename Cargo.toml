@@ -4,3 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+tree-sitter = "0.25.8"
+
+[dev-dependencies]
