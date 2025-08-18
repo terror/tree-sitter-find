@@ -10,6 +10,21 @@ mod parser;
 mod query;
 mod token;
 
+#[cfg(test)]
+#[macro_export]
+macro_rules! assert_matches {
+  ($expression:expr, $( $pattern:pat_param )|+ $( if $guard:expr )? $(,)?) => {
+    match $expression {
+      $( $pattern )|+ $( if $guard )? => {}
+      left => panic!(
+        "assertion failed: (left ~= right)\n  left: `{:?}`\n right: `{}`",
+        left,
+        stringify!($($pattern)|+ $(if $guard)?)
+      ),
+    }
+  }
+}
+
 pub use error::Error;
 
 pub type Result<T = (), E = error::Error> = std::result::Result<T, E>;

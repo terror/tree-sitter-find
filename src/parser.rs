@@ -209,65 +209,65 @@ mod tests {
 
   #[test]
   fn at_without_number() {
-    assert!(matches!(
+    assert_matches!(
       Parser::parse(Lexer::lex("@").unwrap()),
       Err(Error::UnexpectedToken)
-    ));
+    );
   }
 
   #[test]
   fn at_with_invalid_token() {
-    assert!(matches!(
+    assert_matches!(
       Parser::parse(Lexer::lex("@ string").unwrap()),
       Err(Error::UnexpectedToken)
-    ));
+    );
   }
 
   #[test]
   fn missing_closing_bracket() {
-    assert!(matches!(
+    assert_matches!(
       Parser::parse(Lexer::lex("string[1").unwrap()),
       Err(Error::UnexpectedToken)
-    ));
+    );
   }
 
   #[test]
   fn invalid_index() {
-    assert!(matches!(
+    assert_matches!(
       Parser::parse(Lexer::lex("string[").unwrap()),
       Err(Error::InvalidIndex)
-    ));
+    );
   }
 
   #[test]
   fn invalid_index_with_bracket() {
-    assert!(matches!(
+    assert_matches!(
       Parser::parse(Lexer::lex("string[]").unwrap()),
       Err(Error::InvalidIndex)
-    ));
+    );
   }
 
   #[test]
   fn invalid_index_with_string() {
-    assert!(matches!(
+    assert_matches!(
       Parser::parse(Lexer::lex("string[abc]").unwrap()),
       Err(Error::InvalidIndex)
-    ));
+    );
   }
 
   #[test]
   fn unexpected_token_start() {
-    assert!(matches!(
+    assert_matches!(
       Parser::parse(Lexer::lex("[").unwrap()),
       Err(Error::UnexpectedToken)
-    ));
+    );
   }
 
   #[test]
   fn unexpected_token_comma() {
-    assert!(matches!(
+    assert_matches!(
       Parser::parse(Lexer::lex(",").unwrap()),
       Err(Error::UnexpectedToken)
-    ));
+    );
   }
 }

@@ -130,4 +130,12 @@ mod tests {
       ]
     );
   }
+
+  #[test]
+  fn invalid_index() {
+    assert_matches!(
+      Lexer::lex("recipe[18446744073709551616]").unwrap_err(),
+      crate::Error::ParseNumber { .. }
+    );
+  }
 }
