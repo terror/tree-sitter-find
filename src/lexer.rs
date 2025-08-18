@@ -1,4 +1,4 @@
-use {super::*, error::ParseNumberSnafu};
+use super::*;
 
 #[derive(Debug)]
 pub(crate) struct Lexer<'a> {
@@ -98,7 +98,7 @@ impl<'a> Lexer<'a> {
       }
     }
 
-    result.parse().context(ParseNumberSnafu)
+    result.parse().context(error::ParseNumberSnafu)
   }
 
   fn skip_whitespace(&mut self) {
