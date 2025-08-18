@@ -20,6 +20,6 @@ pub trait NodeExt {
 
 impl NodeExt for Node<'_> {
   fn find(&self, query: &str) -> Result<Vec<Node<'_>>> {
-    Ok(Executor::execute(self, &Parser::parse(Lexer::lex(query))?))
+    Ok(Executor::execute(self, &Parser::parse(Lexer::lex(query)?)?))
   }
 }

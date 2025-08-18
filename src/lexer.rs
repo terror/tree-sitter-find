@@ -1,4 +1,4 @@
-use super::*;
+use {super::*, error::ParseNumberSnafu};
 
 #[derive(Debug)]
 pub(crate) struct Lexer<'a> {
@@ -21,7 +21,7 @@ impl<'a> Lexer<'a> {
     self.input.chars().nth(self.position)
   }
 
-  pub(crate) fn lex(input: &'a str) -> Vec<Token> {
+  pub(crate) fn lex(input: &'a str) -> Result<Vec<Token>> {
     let mut lexer = Self::new(input);
 
     let mut tokens = Vec::new();
@@ -56,7 +56,7 @@ impl<'a> Lexer<'a> {
             tokens.push(Token::At);
           }
           character if character.is_ascii_digit() => {
-            tokens.push(Token::Number(lexer.lex_number()));
+            tokens.push(Token::Number(lexer.lex_number()?));
           }
           character if character.is_alphabetic() || character == '_' => {
             tokens.push(Token::Kind(lexer.lex_identifier()));
@@ -68,7 +68,7 @@ impl<'a> Lexer<'a> {
       }
     }
 
-    tokens
+    Ok(tokens)
   }
 
   fn lex_identifier(&mut self) -> String {
@@ -86,7 +86,7 @@ impl<'a> Lexer<'a> {
     result
   }
 
-  fn lex_number(&mut self) -> usize {
+  fn lex_number(&mut self) -> Result<usize> {
     let mut result = String::new();
 
     while let Some(character) = self.character() {
@@ -98,7 +98,7 @@ impl<'a> Lexer<'a> {
       }
     }
 
-    result.parse().unwrap_or(0)
+    result.parse().context(ParseNumberSnafu)
   }
 
   fn skip_whitespace(&mut self) {
@@ -119,7 +119,7 @@ mod tests {
   #[test]
   fn basic_tokens() {
     assert_eq!(
-      Lexer::lex("recipe[0] > identifier"),
+      Lexer::lex("recipe[0] > identifier").unwrap(),
       vec![
         Token::Kind("recipe".to_string()),
         Token::LeftBracket,

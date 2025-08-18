@@ -162,7 +162,7 @@ mod tests {
   use {super::*, indoc::indoc, tree_sitter::Tree};
 
   fn parse(query: &str) -> Query {
-    Parser::parse(Lexer::lex(query)).unwrap()
+    Parser::parse(Lexer::lex(query).unwrap()).unwrap()
   }
 
   fn tree(input: &str) -> Tree {

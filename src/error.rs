@@ -1,11 +1,14 @@
 use super::*;
 
 #[derive(Debug, Snafu)]
+#[snafu(visibility(pub))]
 pub enum Error {
-  #[snafu(display("Invalid index in query"))]
+  #[snafu(display("invalid index in query"))]
   InvalidIndex,
-  #[snafu(display("Unexpected end of input"))]
+  #[snafu(display("failed to parse number: {}", source))]
+  ParseNumber { source: std::num::ParseIntError },
+  #[snafu(display("unexpected end of input"))]
   UnexpectedEnd,
-  #[snafu(display("Unexpected token in query"))]
+  #[snafu(display("unexpected token in query"))]
   UnexpectedToken,
 }
