@@ -294,7 +294,7 @@ mod tests {
     assert_eq!(block_nodes.len(), 1);
 
     let nodes = Executor::execute(
-      &block_nodes.first().unwrap(),
+      block_nodes.first().unwrap(),
       &parse("> let_declaration"),
     );
 
@@ -322,7 +322,7 @@ mod tests {
     assert_eq!(let_nodes.len(), 1);
 
     let nodes =
-      Executor::execute(&let_nodes.first().unwrap(), &parse("< block"));
+      Executor::execute(let_nodes.first().unwrap(), &parse("< block"));
 
     assert_eq!(nodes.len(), 1);
     assert_eq!(nodes[0].kind(), "block");

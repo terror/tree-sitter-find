@@ -20,7 +20,7 @@ check:
 [group: 'check']
 ci: test clippy forbid
   cargo +nightly fmt --all -- --check
-  cargo update --locked --package tsql
+  cargo update --locked --package tree-sitter-find
 
 [group: 'check']
 clippy:
