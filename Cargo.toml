@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-snafu = "0.8"
-tree-sitter = "0.25.8"
+snafu = "0.9"
+tree-sitter = "0.26.8"
 
 [dev-dependencies]
-indoc = "2.0.6"
-tree-sitter-rust = "0.24.0"
+indoc = "2.0.7"
+tree-sitter-rust = "0.24.2"

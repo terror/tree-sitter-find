@@ -58,7 +58,7 @@ impl Executor {
   fn direct_child<'a>(node: &Node<'a>, inner: &Query) -> Vec<Node<'a>> {
     let mut results = Vec::new();
 
-    for i in 0..node.child_count() {
+    for i in 0..Self::child_count(node) {
       if let Some(child) = node.child(i) {
         let child_results = Self::execute(&child, inner);
 
@@ -98,6 +98,10 @@ impl Executor {
   }
 
   fn position<'a>(node: &Node<'a>, position: usize) -> Vec<Node<'a>> {
+    let Ok(position) = position.try_into() else {
+      return Vec::new();
+    };
+
     if let Some(child) = node.child(position) {
       vec![child]
     } else {
@@ -143,10 +147,14 @@ impl Executor {
     nodes
   }
 
+  fn child_count(node: &Node) -> u32 {
+    node.child_count().try_into().unwrap_or(u32::MAX)
+  }
+
   fn direct_children<'a>(node: &Node<'a>, selector: &Query) -> Vec<Node<'a>> {
     let mut results = Vec::new();
 
-    for i in 0..node.child_count() {
+    for i in 0..Self::child_count(node) {
       if let Some(child) = node.child(i) {
         let child_results = Self::execute(&child, selector);
 
@@ -165,7 +173,7 @@ impl Executor {
   where
     F: FnMut(Node<'a>),
   {
-    for i in 0..node.child_count() {
+    for i in 0..Self::child_count(node) {
       if let Some(child) = node.child(i) {
         callback(child);
         Self::traverse_children(&child, callback);
