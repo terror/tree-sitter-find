@@ -2,24 +2,46 @@ use super::*;
 
 pub(crate) struct Executor;
 
+#[derive(Clone, Copy)]
+enum Scope {
+  Descendants,
+  DirectChildren,
+  Inclusive,
+  NodeOnly,
+}
+
 impl Executor {
   pub(crate) fn execute<'a>(
     node: &Node<'a>,
     selector: &Expression,
   ) -> Vec<Node<'a>> {
+    Self::execute_in(node, selector, Scope::Inclusive)
+  }
+
+  fn execute_in<'a>(
+    node: &Node<'a>,
+    selector: &Expression,
+    scope: Scope,
+  ) -> Vec<Node<'a>> {
     match selector {
-      Expression::Child { parent, child } => Self::child(node, parent, child),
+      Expression::Child { parent, child } => {
+        Self::child(node, parent, child, scope)
+      }
       Expression::Current => vec![*node],
       Expression::Descendant {
         ancestor,
         descendant,
-      } => Self::descendant(node, ancestor, descendant),
+      } => Self::descendant(node, ancestor, descendant, scope),
       Expression::DirectChild(inner) => Self::direct_child(node, inner),
-      Expression::Index { query, index } => Self::index(node, query, *index),
-      Expression::Kind(kind) => Self::kind(node, kind),
-      Expression::Parent { child, parent } => Self::parent(node, child, parent),
+      Expression::Index { query, index } => {
+        Self::index(node, query, *index, scope)
+      }
+      Expression::Kind(kind) => Self::kind(node, kind, scope),
+      Expression::Parent { child, parent } => {
+        Self::parent(node, child, parent, scope)
+      }
       Expression::Position(pos) => Self::position(node, *pos),
-      Expression::Union(selectors) => Self::union(node, selectors),
+      Expression::Union(selectors) => Self::union(node, selectors, scope),
     }
   }
 
@@ -27,10 +49,11 @@ impl Executor {
     node: &Node<'a>,
     parent: &Expression,
     child: &Expression,
+    scope: Scope,
   ) -> Vec<Node<'a>> {
     let mut results = Vec::new();
 
-    let parent_matches = Self::execute(node, parent);
+    let parent_matches = Self::execute_in(node, parent, scope);
 
     for parent_node in parent_matches {
       results.extend(Self::direct_children(&parent_node, child));
@@ -43,10 +66,11 @@ impl Executor {
     node: &Node<'a>,
     ancestor: &Expression,
     descendant: &Expression,
+    scope: Scope,
   ) -> Vec<Node<'a>> {
     let mut results = Vec::new();
 
-    let ancestor_matches = Self::execute(node, ancestor);
+    let ancestor_matches = Self::execute_in(node, ancestor, scope);
 
     for ancestor_node in ancestor_matches {
       results.extend(Self::descendants(&ancestor_node, descendant));
@@ -63,28 +87,44 @@ impl Executor {
     node: &Node<'a>,
     query: &Expression,
     index: usize,
+    scope: Scope,
   ) -> Vec<Node<'a>> {
-    let matches = Self::execute(node, query);
-
-    if let Some(result) = matches.get(index) {
-      vec![*result]
-    } else {
-      Vec::new()
-    }
+    Self::execute_in(node, query, scope)
+      .into_iter()
+      .filter(|result| Self::in_scope(node, result, scope))
+      .nth(index)
+      .into_iter()
+      .collect()
   }
 
-  fn kind<'a>(node: &Node<'a>, kind: &str) -> Vec<Node<'a>> {
+  fn kind<'a>(node: &Node<'a>, kind: &str, scope: Scope) -> Vec<Node<'a>> {
     let mut results = Vec::new();
 
-    if node.kind() == kind {
+    if matches!(scope, Scope::Inclusive | Scope::NodeOnly)
+      && node.kind() == kind
+    {
       results.push(*node);
     }
 
-    Self::traverse_children(node, &mut |child| {
-      if child.kind() == kind {
-        results.push(child);
+    match scope {
+      Scope::Descendants | Scope::Inclusive => {
+        Self::traverse_children(node, &mut |child| {
+          if child.kind() == kind {
+            results.push(child);
+          }
+        });
       }
-    });
+      Scope::DirectChildren => {
+        for position in 0..Self::child_count(node) {
+          if let Some(child) = node.child(position) {
+            if child.kind() == kind {
+              results.push(child);
+            }
+          }
+        }
+      }
+      Scope::NodeOnly => {}
+    }
 
     results
   }
@@ -105,16 +145,15 @@ impl Executor {
     node: &Node<'a>,
     child: &Expression,
     parent: &Expression,
+    scope: Scope,
   ) -> Vec<Node<'a>> {
     let mut results = Vec::new();
 
-    let child_matches = Self::execute(node, child);
+    let child_matches = Self::execute_in(node, child, scope);
 
     for child_node in child_matches {
       if let Some(parent_node) = child_node.parent() {
-        let parent_results = Self::execute(&parent_node, parent);
-
-        if parent_results.contains(&parent_node) {
+        if Self::matches_node(&parent_node, parent) {
           results.push(parent_node);
         }
       }
@@ -123,11 +162,15 @@ impl Executor {
     Self::deduplicate_and_sort(results)
   }
 
-  fn union<'a>(node: &Node<'a>, selectors: &[Expression]) -> Vec<Node<'a>> {
+  fn union<'a>(
+    node: &Node<'a>,
+    selectors: &[Expression],
+    scope: Scope,
+  ) -> Vec<Node<'a>> {
     let mut results = Vec::new();
 
     for selector in selectors {
-      results.extend(Self::execute(node, selector));
+      results.extend(Self::execute_in(node, selector, scope));
     }
 
     results
@@ -147,44 +190,44 @@ impl Executor {
     node: &Node<'a>,
     selector: &Expression,
   ) -> Vec<Node<'a>> {
-    if let Expression::Index { query, index } = selector {
-      return Self::direct_children(node, query)
-        .get(*index)
-        .copied()
-        .into_iter()
-        .collect();
-    }
-
-    let mut results = Vec::new();
-
-    for i in 0..Self::child_count(node) {
-      if let Some(child) = node.child(i) {
-        let child_results = Self::execute(&child, selector);
-
-        for result in child_results {
-          if result == child {
-            results.push(result);
-          }
-        }
-      }
-    }
-
-    results
+    Self::execute_in(node, selector, Scope::DirectChildren)
+      .into_iter()
+      .filter(|result| Self::in_scope(node, result, Scope::DirectChildren))
+      .collect()
   }
 
   fn descendants<'a>(node: &Node<'a>, selector: &Expression) -> Vec<Node<'a>> {
-    if let Expression::Index { query, index } = selector {
-      return Self::descendants(node, query)
-        .get(*index)
-        .copied()
-        .into_iter()
-        .collect();
+    Self::execute_in(node, selector, Scope::Descendants)
+      .into_iter()
+      .filter(|result| Self::in_scope(node, result, Scope::Descendants))
+      .collect()
+  }
+
+  fn in_scope(root: &Node, node: &Node, scope: Scope) -> bool {
+    match scope {
+      Scope::Descendants => Self::is_descendant(root, node),
+      Scope::DirectChildren => node.parent() == Some(*root),
+      Scope::Inclusive => true,
+      Scope::NodeOnly => node == root,
+    }
+  }
+
+  fn is_descendant(ancestor: &Node, node: &Node) -> bool {
+    let mut current = node.parent();
+
+    while let Some(parent) = current {
+      if parent == *ancestor {
+        return true;
+      }
+
+      current = parent.parent();
     }
 
-    Self::execute(node, selector)
-      .into_iter()
-      .filter(|result| result != node)
-      .collect()
+    false
+  }
+
+  fn matches_node(node: &Node, selector: &Expression) -> bool {
+    Self::execute_in(node, selector, Scope::NodeOnly).contains(node)
   }
 
   fn traverse_children<'a, F>(node: &Node<'a>, callback: &mut F)
@@ -301,6 +344,30 @@ mod tests {
   }
 
   #[test]
+  fn query_direct_child_scopes_indexed_group() {
+    let program = indoc! {"
+      const VALUE: usize = 0;
+      fn first() {}
+      fn second() {}
+    "};
+
+    let tree = tree(program);
+    let nodes = Executor::execute(
+      &tree.root_node(),
+      &parse("source_file > (function_item[0], const_item)"),
+    );
+
+    assert_eq!(
+      nodes.iter().map(Node::kind).collect::<Vec<_>>(),
+      ["function_item", "const_item"]
+    );
+    assert_eq!(
+      nodes[0].utf8_text(program.as_bytes()).unwrap(),
+      "fn first() {}"
+    );
+  }
+
+  #[test]
   fn query_descendant_excludes_ancestor() {
     let program = indoc! {"
       fn outer() {
@@ -322,6 +389,69 @@ mod tests {
         "fn inner() {}"
       );
     }
+  }
+
+  #[test]
+  fn query_descendant_scopes_indexed_group() {
+    let program = indoc! {"
+      fn outer() {
+        fn inner() {}
+      }
+    "};
+
+    let tree = tree(program);
+    let nodes = Executor::execute(
+      &tree.root_node(),
+      &parse("function_item (function_item[0], struct_item)"),
+    );
+
+    assert_eq!(nodes.len(), 1);
+    assert_eq!(
+      nodes[0].utf8_text(program.as_bytes()).unwrap(),
+      "fn inner() {}"
+    );
+  }
+
+  #[test]
+  fn query_descendant_scopes_hierarchical_selector() {
+    let program = indoc! {"
+      fn outer() {
+        fn inner() {}
+      }
+    "};
+
+    let tree = tree(program);
+    let nodes = Executor::execute(
+      &tree.root_node(),
+      &parse("function_item (function_item[0] > identifier)"),
+    );
+
+    assert_eq!(nodes.len(), 1);
+    assert_eq!(nodes[0].utf8_text(program.as_bytes()).unwrap(), "inner");
+  }
+
+  #[test]
+  fn query_descendant_does_not_escape_ancestor() {
+    let tree = tree("fn main() {}");
+    let nodes = Executor::execute(
+      &tree.root_node(),
+      &parse("function_item (< source_file)"),
+    );
+
+    assert!(nodes.is_empty());
+  }
+
+  #[test]
+  fn query_descendant_indexes_after_scoping() {
+    let program = "fn main() {}";
+    let tree = tree(program);
+    let nodes = Executor::execute(
+      &tree.root_node(),
+      &parse("function_item (< source_file, identifier)[0]"),
+    );
+
+    assert_eq!(nodes.len(), 1);
+    assert_eq!(nodes[0].utf8_text(program.as_bytes()).unwrap(), "main");
   }
 
   #[test]
@@ -409,6 +539,20 @@ mod tests {
 
     assert_eq!(nodes.len(), 1);
     assert_eq!(nodes[0].kind(), "function_item");
+  }
+
+  #[test]
+  fn query_parent_scopes_index() {
+    let program = "fn main() {}";
+    let tree = tree(program);
+
+    let nodes = Executor::execute(
+      &tree.root_node(),
+      &parse("identifier < function_item[0]"),
+    );
+
+    assert_eq!(nodes.len(), 1);
+    assert_eq!(nodes[0].utf8_text(program.as_bytes()).unwrap(), program);
   }
 
   #[test]
