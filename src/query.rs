@@ -9,6 +9,7 @@ use {
 
 #[derive(Clone, Debug, PartialEq)]
 #[must_use]
+/// A parsed tree-sitter-find query that can be reused across syntax trees.
 pub struct Query {
   expression: Expression,
 }
@@ -18,6 +19,11 @@ impl Query {
     Executor::execute(node, &self.expression)
   }
 
+  /// Parses query source into a reusable query.
+  ///
+  /// # Errors
+  ///
+  /// Returns an error when `input` contains invalid query syntax.
   pub fn parse(input: &str) -> Result<Self> {
     Ok(Self {
       expression: Parser::parse(Lexer::lex(input)?)?,
