@@ -49,7 +49,7 @@ impl Executor {
     let ancestor_matches = Self::execute(node, ancestor);
 
     for ancestor_node in ancestor_matches {
-      results.extend(Self::execute(&ancestor_node, descendant));
+      results.extend(Self::descendants(&ancestor_node, descendant));
     }
 
     results
@@ -172,6 +172,21 @@ impl Executor {
     results
   }
 
+  fn descendants<'a>(node: &Node<'a>, selector: &Expression) -> Vec<Node<'a>> {
+    if let Expression::Index { query, index } = selector {
+      return Self::descendants(node, query)
+        .get(*index)
+        .copied()
+        .into_iter()
+        .collect();
+    }
+
+    Self::execute(node, selector)
+      .into_iter()
+      .filter(|result| result != node)
+      .collect()
+  }
+
   fn traverse_children<'a, F>(node: &Node<'a>, callback: &mut F)
   where
     F: FnMut(Node<'a>),
@@ -281,6 +296,30 @@ mod tests {
       assert_eq!(
         nodes[0].utf8_text(program.as_bytes()).unwrap(),
         "fn second() {}"
+      );
+    }
+  }
+
+  #[test]
+  fn query_descendant_excludes_ancestor() {
+    let program = indoc! {"
+      fn outer() {
+        fn inner() {}
+      }
+    "};
+
+    let tree = tree(program);
+
+    for query in [
+      "function_item function_item",
+      "function_item function_item[0]",
+    ] {
+      let nodes = Executor::execute(&tree.root_node(), &parse(query));
+
+      assert_eq!(nodes.len(), 1);
+      assert_eq!(
+        nodes[0].utf8_text(program.as_bytes()).unwrap(),
+        "fn inner() {}"
       );
     }
   }
