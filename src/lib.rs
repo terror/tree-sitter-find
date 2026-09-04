@@ -1,10 +1,10 @@
 use {
-  executor::Executor, lexer::Lexer, parser::Parser, query::Query,
-  snafu::prelude::*, token::Token, tree_sitter::Node,
+  expression::Expression, snafu::prelude::*, token::Token, tree_sitter::Node,
 };
 
 mod error;
 mod executor;
+mod expression;
 mod lexer;
 mod parser;
 mod query;
@@ -25,16 +25,16 @@ macro_rules! assert_matches {
   }
 }
 
-pub use error::Error;
+pub use {error::Error, query::Query};
 
 pub type Result<T = (), E = error::Error> = std::result::Result<T, E>;
 
-pub trait NodeExt {
-  fn find(&self, query: &str) -> Result<Vec<Node<'_>>>;
+pub trait NodeExt<'tree> {
+  fn find(&self, query: &str) -> Result<Vec<Node<'tree>>>;
 }
 
-impl NodeExt for Node<'_> {
-  fn find(&self, query: &str) -> Result<Vec<Node<'_>>> {
-    Ok(Executor::execute(self, &Parser::parse(Lexer::lex(query)?)?))
+impl<'tree> NodeExt<'tree> for Node<'tree> {
+  fn find(&self, query: &str) -> Result<Vec<Node<'tree>>> {
+    Ok(Query::parse(query)?.execute(self))
   }
 }
