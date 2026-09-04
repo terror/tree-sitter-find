@@ -9,6 +9,8 @@ pub enum Error {
   ParseNumber { source: std::num::ParseIntError },
   #[snafu(display("unexpected end of input"))]
   UnexpectedEnd,
+  #[snafu(display("unexpected character `{character}` at byte {position}"))]
+  UnexpectedCharacter { character: char, position: usize },
   #[snafu(display("unexpected token in query"))]
   UnexpectedToken,
 }

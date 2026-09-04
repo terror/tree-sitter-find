@@ -110,12 +110,16 @@ impl Parser {
     while let Some(Token::LeftBracket) = self.token() {
       self.advance();
 
-      let Some(Token::Number(index)) = self.advance() else {
-        return Err(Error::InvalidIndex);
+      let index = match self.advance() {
+        Some(Token::Number(index)) => index,
+        Some(_) => return Err(Error::InvalidIndex),
+        None => return Err(Error::UnexpectedEnd),
       };
 
-      if !matches!(self.advance(), Some(Token::RightBracket)) {
-        return Err(Error::UnexpectedToken);
+      match self.advance() {
+        Some(Token::RightBracket) => {}
+        Some(_) => return Err(Error::UnexpectedToken),
+        None => return Err(Error::UnexpectedEnd),
       }
 
       query = Query::Index {
@@ -136,10 +140,10 @@ impl Parser {
       Some(Token::At) => {
         self.advance();
 
-        if let Some(Token::Number(position)) = self.advance() {
-          Ok(Query::Position(position))
-        } else {
-          Err(Error::UnexpectedToken)
+        match self.advance() {
+          Some(Token::Number(position)) => Ok(Query::Position(position)),
+          Some(_) => Err(Error::UnexpectedToken),
+          None => Err(Error::UnexpectedEnd),
         }
       }
       Some(Token::Kind(kind)) => {
@@ -153,13 +157,14 @@ impl Parser {
 
         let query = self.parse_union_query()?;
 
-        if matches!(self.advance(), Some(Token::RightParen)) {
-          Ok(query)
-        } else {
-          Err(Error::UnexpectedToken)
+        match self.advance() {
+          Some(Token::RightParen) => Ok(query),
+          Some(_) => Err(Error::UnexpectedToken),
+          None => Err(Error::UnexpectedEnd),
         }
       }
-      _ => Err(Error::UnexpectedToken),
+      Some(_) => Err(Error::UnexpectedToken),
+      None => Err(Error::UnexpectedEnd),
     }
   }
 }
@@ -327,7 +332,7 @@ mod tests {
   fn at_without_number() {
     assert_matches!(
       Parser::parse(Lexer::lex("@").unwrap()),
-      Err(Error::UnexpectedToken)
+      Err(Error::UnexpectedEnd)
     );
   }
 
@@ -343,7 +348,7 @@ mod tests {
   fn missing_closing_bracket() {
     assert_matches!(
       Parser::parse(Lexer::lex("string[1").unwrap()),
-      Err(Error::UnexpectedToken)
+      Err(Error::UnexpectedEnd)
     );
   }
 
@@ -351,15 +356,15 @@ mod tests {
   fn missing_closing_parenthesis() {
     assert_matches!(
       Parser::parse(Lexer::lex("(string").unwrap()),
-      Err(Error::UnexpectedToken)
+      Err(Error::UnexpectedEnd)
     );
   }
 
   #[test]
-  fn invalid_index() {
+  fn missing_index() {
     assert_matches!(
       Parser::parse(Lexer::lex("string[").unwrap()),
-      Err(Error::InvalidIndex)
+      Err(Error::UnexpectedEnd)
     );
   }
 
@@ -399,6 +404,14 @@ mod tests {
   fn unexpected_trailing_parenthesis() {
     assert_matches!(
       Parser::parse(Lexer::lex("string)").unwrap()),
+      Err(Error::UnexpectedToken)
+    );
+  }
+
+  #[test]
+  fn unexpected_trailing_token() {
+    assert_matches!(
+      Parser::parse(Lexer::lex("string]").unwrap()),
       Err(Error::UnexpectedToken)
     );
   }

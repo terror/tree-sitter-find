@@ -1,24 +1,35 @@
-use super::*;
+use {
+  super::*,
+  std::{iter::Peekable, str::CharIndices},
+};
 
 #[derive(Debug)]
 pub(crate) struct Lexer<'a> {
-  input: &'a str,
-  position: usize,
+  characters: Peekable<CharIndices<'a>>,
+  input_length: usize,
 }
 
 impl<'a> Lexer<'a> {
   pub(crate) fn new(input: &'a str) -> Self {
-    Self { input, position: 0 }
+    Self {
+      characters: input.char_indices().peekable(),
+      input_length: input.len(),
+    }
   }
 
   fn advance(&mut self) -> Option<char> {
-    let character = self.character();
-    self.position += 1;
-    character
+    self.characters.next().map(|(_, character)| character)
   }
 
-  fn character(&self) -> Option<char> {
-    self.input.chars().nth(self.position)
+  fn character(&mut self) -> Option<char> {
+    self.characters.peek().map(|(_, character)| *character)
+  }
+
+  fn position(&mut self) -> usize {
+    self
+      .characters
+      .peek()
+      .map_or(self.input_length, |(position, _)| *position)
   }
 
   pub(crate) fn lex(input: &'a str) -> Result<Vec<Token>> {
@@ -74,7 +85,10 @@ impl<'a> Lexer<'a> {
             tokens.push(Token::Kind(lexer.lex_identifier()));
           }
           _ => {
-            lexer.advance();
+            return Err(Error::UnexpectedCharacter {
+              character,
+              position: lexer.position(),
+            });
           }
         }
       }
@@ -162,6 +176,28 @@ mod tests {
     assert_matches!(
       Lexer::lex("recipe[18446744073709551616]").unwrap_err(),
       crate::Error::ParseNumber { .. }
+    );
+  }
+
+  #[test]
+  fn unexpected_character() {
+    assert_matches!(
+      Lexer::lex("recipe!").unwrap_err(),
+      Error::UnexpectedCharacter {
+        character: '!',
+        position: 6,
+      }
+    );
+  }
+
+  #[test]
+  fn unexpected_character_position_is_a_byte_offset() {
+    assert_matches!(
+      Lexer::lex("é!").unwrap_err(),
+      Error::UnexpectedCharacter {
+        character: '!',
+        position: 2,
+      }
     );
   }
 }
