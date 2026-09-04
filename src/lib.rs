@@ -8,6 +8,7 @@ mod expression;
 mod lexer;
 mod parser;
 mod query;
+mod query_input;
 mod token;
 
 #[cfg(test)]
@@ -25,16 +26,22 @@ macro_rules! assert_matches {
   }
 }
 
-pub use {error::Error, query::Query};
+pub use {error::Error, query::Query, query_input::QueryInput};
 
 pub type Result<T = (), E = error::Error> = std::result::Result<T, E>;
 
 pub trait NodeExt<'tree> {
-  fn find(&self, query: &str) -> Result<Vec<Node<'tree>>>;
+  fn find<'query>(
+    &self,
+    query: impl Into<QueryInput<'query>>,
+  ) -> Result<Vec<Node<'tree>>>;
 }
 
 impl<'tree> NodeExt<'tree> for Node<'tree> {
-  fn find(&self, query: &str) -> Result<Vec<Node<'tree>>> {
-    Ok(Query::parse(query)?.execute(self))
+  fn find<'query>(
+    &self,
+    query: impl Into<QueryInput<'query>>,
+  ) -> Result<Vec<Node<'tree>>> {
+    query.into().execute(self)
   }
 }

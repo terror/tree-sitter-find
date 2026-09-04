@@ -14,7 +14,7 @@ pub struct Query {
 }
 
 impl Query {
-  pub fn execute<'tree>(&self, node: &Node<'tree>) -> Vec<Node<'tree>> {
+  pub(crate) fn execute<'tree>(&self, node: &Node<'tree>) -> Vec<Node<'tree>> {
     Executor::execute(node, &self.expression)
   }
 
