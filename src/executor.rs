@@ -114,7 +114,7 @@ impl Executor {
       if let Some(parent_node) = child_node.parent() {
         let parent_results = Self::execute(&parent_node, parent);
 
-        if !parent_results.is_empty() && parent_results[0] == parent_node {
+        if parent_results.contains(&parent_node) {
           results.push(parent_node);
         }
       }
@@ -395,6 +395,20 @@ mod tests {
       nodes[1].utf8_text(program.as_bytes()).unwrap(),
       "let y = 10;"
     );
+  }
+
+  #[test]
+  fn query_parent_matches_any_group_branch() {
+    let program = "fn main() {}";
+    let tree = tree(program);
+
+    let nodes = Executor::execute(
+      &tree.root_node(),
+      &parse("identifier < (identifier, function_item)"),
+    );
+
+    assert_eq!(nodes.len(), 1);
+    assert_eq!(nodes[0].kind(), "function_item");
   }
 
   #[test]
