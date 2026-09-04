@@ -8,6 +8,10 @@ enum QueryInputKind<'query> {
 
 #[derive(Clone, Copy, Debug)]
 #[must_use]
+/// Query input accepted by [`NodeExt::find`].
+///
+/// Values are created automatically from query source or a compiled
+/// [`Query`].
 pub struct QueryInput<'query> {
   kind: QueryInputKind<'query>,
 }

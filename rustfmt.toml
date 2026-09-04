@@ -1,4 +1,4 @@
-edition = "2018"
+edition = "2024"
 imports_granularity = "One"
 max_width = 80
 newline_style = "Unix"

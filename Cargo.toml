@@ -2,6 +2,12 @@
 name = "tree-sitter-find"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.85"
+description = "A compact query language for finding nodes in tree-sitter syntax trees"
+repository = "https://github.com/terror/tree-sitter-find"
+license = "CC0-1.0"
+keywords = ["tree-sitter", "query", "syntax-tree", "parser"]
+categories = ["development-tools", "parsing"]
 
 [dependencies]
 snafu = "0.9"
