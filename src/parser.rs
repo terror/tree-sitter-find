@@ -24,7 +24,14 @@ impl Parser {
   }
 
   pub(crate) fn parse(input: Vec<Token>) -> Result<Query, Error> {
-    Self::new(input).parse_union_query()
+    let mut parser = Self::new(input);
+    let query = parser.parse_union_query()?;
+
+    if parser.token().is_some() {
+      Err(Error::UnexpectedToken)
+    } else {
+      Ok(query)
+    }
   }
 
   fn parse_union_query(&mut self) -> Result<Query, Error> {
@@ -49,7 +56,7 @@ impl Parser {
 
         Query::Child {
           parent: Box::new(Query::Current),
-          child: Box::new(self.parse_simple_query()?),
+          child: Box::new(self.parse_postfix_query()?),
         }
       }
       Some(Token::Less) => {
@@ -57,10 +64,10 @@ impl Parser {
 
         Query::Parent {
           child: Box::new(Query::Current),
-          parent: Box::new(self.parse_simple_query()?),
+          parent: Box::new(self.parse_postfix_query()?),
         }
       }
-      _ => self.parse_simple_query()?,
+      _ => self.parse_postfix_query()?,
     };
 
     loop {
@@ -70,7 +77,7 @@ impl Parser {
 
           left = Query::Child {
             parent: Box::new(left),
-            child: Box::new(self.parse_simple_query()?),
+            child: Box::new(self.parse_postfix_query()?),
           };
         }
         Some(Token::Less) => {
@@ -78,13 +85,16 @@ impl Parser {
 
           left = Query::Parent {
             child: Box::new(left),
-            parent: Box::new(self.parse_simple_query()?),
+            parent: Box::new(self.parse_postfix_query()?),
           };
         }
-        Some(Token::Kind(_)) | Some(Token::Caret) | Some(Token::At) => {
+        Some(Token::Kind(_))
+        | Some(Token::Caret)
+        | Some(Token::At)
+        | Some(Token::LeftParen) => {
           left = Query::Descendant {
             ancestor: Box::new(left),
-            descendant: Box::new(self.parse_simple_query()?),
+            descendant: Box::new(self.parse_postfix_query()?),
           };
         }
         _ => break,
@@ -94,11 +104,34 @@ impl Parser {
     Ok(left)
   }
 
-  fn parse_simple_query(&mut self) -> Result<Query> {
+  fn parse_postfix_query(&mut self) -> Result<Query> {
+    let mut query = self.parse_primary_query()?;
+
+    while let Some(Token::LeftBracket) = self.token() {
+      self.advance();
+
+      let Some(Token::Number(index)) = self.advance() else {
+        return Err(Error::InvalidIndex);
+      };
+
+      if !matches!(self.advance(), Some(Token::RightBracket)) {
+        return Err(Error::UnexpectedToken);
+      }
+
+      query = Query::Index {
+        index,
+        query: Box::new(query),
+      };
+    }
+
+    Ok(query)
+  }
+
+  fn parse_primary_query(&mut self) -> Result<Query> {
     match self.token() {
       Some(Token::Caret) => {
         self.advance();
-        Ok(Query::DirectChild(Box::new(self.parse_simple_query()?)))
+        Ok(Query::DirectChild(Box::new(self.parse_postfix_query()?)))
       }
       Some(Token::At) => {
         self.advance();
@@ -113,21 +146,17 @@ impl Parser {
         let kind = kind.clone();
 
         self.advance();
+        Ok(Query::Kind(kind))
+      }
+      Some(Token::LeftParen) => {
+        self.advance();
 
-        if let Some(Token::LeftBracket) = self.token() {
-          self.advance();
+        let query = self.parse_union_query()?;
 
-          if let Some(Token::Number(index)) = self.advance() {
-            if let Some(Token::RightBracket) = self.advance() {
-              Ok(Query::Index { kind, index })
-            } else {
-              Err(Error::UnexpectedToken)
-            }
-          } else {
-            Err(Error::InvalidIndex)
-          }
+        if matches!(self.advance(), Some(Token::RightParen)) {
+          Ok(query)
         } else {
-          Ok(Query::Kind(kind))
+          Err(Error::UnexpectedToken)
         }
       }
       _ => Err(Error::UnexpectedToken),
@@ -190,7 +219,35 @@ mod tests {
       query("string[2]"),
       Query::Index {
         index: 2,
-        kind: "string".to_string(),
+        query: Box::new(Query::Kind("string".to_string())),
+      }
+    );
+  }
+
+  #[test]
+  fn index_grouped_query() {
+    assert_eq!(
+      query("(string, number)[1]"),
+      Query::Index {
+        index: 1,
+        query: Box::new(Query::Union(vec![
+          Query::Kind("string".to_string()),
+          Query::Kind("number".to_string()),
+        ])),
+      }
+    );
+  }
+
+  #[test]
+  fn index_hierarchical_query() {
+    assert_eq!(
+      query("(object > string)[0]"),
+      Query::Index {
+        index: 0,
+        query: Box::new(Query::Child {
+          child: Box::new(Query::Kind("string".to_string())),
+          parent: Box::new(Query::Kind("object".to_string())),
+        }),
       }
     );
   }
@@ -226,8 +283,8 @@ mod tests {
             ancestor: Box::new(Query::Child {
               parent: Box::new(Query::Kind("object".to_string())),
               child: Box::new(Query::Index {
-                kind: "array".to_string(),
                 index: 0,
+                query: Box::new(Query::Kind("array".to_string())),
               }),
             }),
             descendant: Box::new(Query::Kind("string".to_string())),
@@ -291,6 +348,14 @@ mod tests {
   }
 
   #[test]
+  fn missing_closing_parenthesis() {
+    assert_matches!(
+      Parser::parse(Lexer::lex("(string").unwrap()),
+      Err(Error::UnexpectedToken)
+    );
+  }
+
+  #[test]
   fn invalid_index() {
     assert_matches!(
       Parser::parse(Lexer::lex("string[").unwrap()),
@@ -326,6 +391,14 @@ mod tests {
   fn unexpected_token_comma() {
     assert_matches!(
       Parser::parse(Lexer::lex(",").unwrap()),
+      Err(Error::UnexpectedToken)
+    );
+  }
+
+  #[test]
+  fn unexpected_trailing_parenthesis() {
+    assert_matches!(
+      Parser::parse(Lexer::lex("string)").unwrap()),
       Err(Error::UnexpectedToken)
     );
   }

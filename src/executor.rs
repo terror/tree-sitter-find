@@ -15,7 +15,7 @@ impl Executor {
         descendant,
       } => Self::descendant(node, ancestor, descendant),
       Query::DirectChild(inner) => Self::direct_child(node, inner),
-      Query::Index { kind, index } => Self::index(node, kind, *index),
+      Query::Index { query, index } => Self::index(node, query, *index),
       Query::Kind(kind) => Self::kind(node, kind),
       Query::Parent { child, parent } => Self::parent(node, child, parent),
       Query::Position(pos) => Self::position(node, *pos),
@@ -59,8 +59,8 @@ impl Executor {
     Self::direct_children(node, inner)
   }
 
-  fn index<'a>(node: &Node<'a>, kind: &str, index: usize) -> Vec<Node<'a>> {
-    let matches = Self::kind(node, kind);
+  fn index<'a>(node: &Node<'a>, query: &Query, index: usize) -> Vec<Node<'a>> {
+    let matches = Self::execute(node, query);
 
     if let Some(result) = matches.get(index) {
       vec![*result]
@@ -140,11 +140,10 @@ impl Executor {
   }
 
   fn direct_children<'a>(node: &Node<'a>, selector: &Query) -> Vec<Node<'a>> {
-    if let Query::Index { kind, index } = selector {
-      return (0..Self::child_count(node))
-        .filter_map(|position| node.child(position))
-        .filter(|child| child.kind() == kind)
-        .nth(*index)
+    if let Query::Index { query, index } = selector {
+      return Self::direct_children(node, query)
+        .get(*index)
+        .copied()
         .into_iter()
         .collect();
     }
@@ -272,6 +271,49 @@ mod tests {
         "fn second() {}"
       );
     }
+  }
+
+  #[test]
+  fn query_group_by_index() {
+    let program = indoc! {"
+      const VALUE: usize = 0;
+      fn first() {}
+      fn second() {}
+    "};
+
+    let tree = tree(program);
+
+    let nodes = Executor::execute(
+      &tree.root_node(),
+      &parse("(const_item, function_item)[1]"),
+    );
+
+    assert_eq!(nodes.len(), 1);
+    assert_eq!(
+      nodes[0].utf8_text(program.as_bytes()).unwrap(),
+      "fn first() {}"
+    );
+  }
+
+  #[test]
+  fn query_hierarchy_by_index() {
+    let program = indoc! {"
+      fn first() {}
+      fn second() {}
+    "};
+
+    let tree = tree(program);
+
+    let nodes = Executor::execute(
+      &tree.root_node(),
+      &parse("(source_file > function_item)[1]"),
+    );
+
+    assert_eq!(nodes.len(), 1);
+    assert_eq!(
+      nodes[0].utf8_text(program.as_bytes()).unwrap(),
+      "fn second() {}"
+    );
   }
 
   #[test]

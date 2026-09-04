@@ -35,9 +35,17 @@ impl<'a> Lexer<'a> {
             lexer.advance();
             tokens.push(Token::LeftBracket);
           }
+          '(' => {
+            lexer.advance();
+            tokens.push(Token::LeftParen);
+          }
           ']' => {
             lexer.advance();
             tokens.push(Token::RightBracket);
+          }
+          ')' => {
+            lexer.advance();
+            tokens.push(Token::RightParen);
           }
           ',' => {
             lexer.advance();
@@ -123,14 +131,16 @@ mod tests {
   #[test]
   fn basic_tokens() {
     assert_eq!(
-      Lexer::lex("recipe[0] > identifier").unwrap(),
+      Lexer::lex("(recipe[0] > identifier)").unwrap(),
       vec![
+        Token::LeftParen,
         Token::Kind("recipe".to_string()),
         Token::LeftBracket,
         Token::Number(0),
         Token::RightBracket,
         Token::Greater,
         Token::Kind("identifier".to_string()),
+        Token::RightParen,
       ]
     );
   }

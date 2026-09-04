@@ -12,7 +12,7 @@ pub(crate) enum Query {
   DirectChild(Box<Query>),
   Index {
     index: usize,
-    kind: String,
+    query: Box<Query>,
   },
   Kind(String),
   Parent {
