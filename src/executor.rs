@@ -5,28 +5,28 @@ pub(crate) struct Executor;
 impl Executor {
   pub(crate) fn execute<'a>(
     node: &Node<'a>,
-    selector: &Query,
+    selector: &Expression,
   ) -> Vec<Node<'a>> {
     match selector {
-      Query::Child { parent, child } => Self::child(node, parent, child),
-      Query::Current => vec![*node],
-      Query::Descendant {
+      Expression::Child { parent, child } => Self::child(node, parent, child),
+      Expression::Current => vec![*node],
+      Expression::Descendant {
         ancestor,
         descendant,
       } => Self::descendant(node, ancestor, descendant),
-      Query::DirectChild(inner) => Self::direct_child(node, inner),
-      Query::Index { query, index } => Self::index(node, query, *index),
-      Query::Kind(kind) => Self::kind(node, kind),
-      Query::Parent { child, parent } => Self::parent(node, child, parent),
-      Query::Position(pos) => Self::position(node, *pos),
-      Query::Union(selectors) => Self::union(node, selectors),
+      Expression::DirectChild(inner) => Self::direct_child(node, inner),
+      Expression::Index { query, index } => Self::index(node, query, *index),
+      Expression::Kind(kind) => Self::kind(node, kind),
+      Expression::Parent { child, parent } => Self::parent(node, child, parent),
+      Expression::Position(pos) => Self::position(node, *pos),
+      Expression::Union(selectors) => Self::union(node, selectors),
     }
   }
 
   fn child<'a>(
     node: &Node<'a>,
-    parent: &Query,
-    child: &Query,
+    parent: &Expression,
+    child: &Expression,
   ) -> Vec<Node<'a>> {
     let mut results = Vec::new();
 
@@ -41,8 +41,8 @@ impl Executor {
 
   fn descendant<'a>(
     node: &Node<'a>,
-    ancestor: &Query,
-    descendant: &Query,
+    ancestor: &Expression,
+    descendant: &Expression,
   ) -> Vec<Node<'a>> {
     let mut results = Vec::new();
 
@@ -55,11 +55,15 @@ impl Executor {
     results
   }
 
-  fn direct_child<'a>(node: &Node<'a>, inner: &Query) -> Vec<Node<'a>> {
+  fn direct_child<'a>(node: &Node<'a>, inner: &Expression) -> Vec<Node<'a>> {
     Self::direct_children(node, inner)
   }
 
-  fn index<'a>(node: &Node<'a>, query: &Query, index: usize) -> Vec<Node<'a>> {
+  fn index<'a>(
+    node: &Node<'a>,
+    query: &Expression,
+    index: usize,
+  ) -> Vec<Node<'a>> {
     let matches = Self::execute(node, query);
 
     if let Some(result) = matches.get(index) {
@@ -99,8 +103,8 @@ impl Executor {
 
   fn parent<'a>(
     node: &Node<'a>,
-    child: &Query,
-    parent: &Query,
+    child: &Expression,
+    parent: &Expression,
   ) -> Vec<Node<'a>> {
     let mut results = Vec::new();
 
@@ -119,7 +123,7 @@ impl Executor {
     Self::deduplicate_and_sort(results)
   }
 
-  fn union<'a>(node: &Node<'a>, selectors: &[Query]) -> Vec<Node<'a>> {
+  fn union<'a>(node: &Node<'a>, selectors: &[Expression]) -> Vec<Node<'a>> {
     let mut results = Vec::new();
 
     for selector in selectors {
@@ -139,8 +143,11 @@ impl Executor {
     node.child_count().try_into().unwrap_or(u32::MAX)
   }
 
-  fn direct_children<'a>(node: &Node<'a>, selector: &Query) -> Vec<Node<'a>> {
-    if let Query::Index { query, index } = selector {
+  fn direct_children<'a>(
+    node: &Node<'a>,
+    selector: &Expression,
+  ) -> Vec<Node<'a>> {
+    if let Expression::Index { query, index } = selector {
       return Self::direct_children(node, query)
         .get(*index)
         .copied()
@@ -180,9 +187,14 @@ impl Executor {
 
 #[cfg(test)]
 mod tests {
-  use {super::*, indoc::indoc, tree_sitter::Tree};
+  use {
+    super::*,
+    crate::{lexer::Lexer, parser::Parser},
+    indoc::indoc,
+    tree_sitter::Tree,
+  };
 
-  fn parse(query: &str) -> Query {
+  fn parse(query: &str) -> Expression {
     Parser::parse(Lexer::lex(query).unwrap()).unwrap()
   }
 

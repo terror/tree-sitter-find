@@ -23,7 +23,7 @@ impl Parser {
     self.input.get(self.position)
   }
 
-  pub(crate) fn parse(input: Vec<Token>) -> Result<Query, Error> {
+  pub(crate) fn parse(input: Vec<Token>) -> Result<Expression, Error> {
     let mut parser = Self::new(input);
     let query = parser.parse_union_query()?;
 
@@ -34,7 +34,7 @@ impl Parser {
     }
   }
 
-  fn parse_union_query(&mut self) -> Result<Query, Error> {
+  fn parse_union_query(&mut self) -> Result<Expression, Error> {
     let mut selectors = vec![self.parse_hierarchical_query()?];
 
     while let Some(Token::Comma) = self.token() {
@@ -45,25 +45,25 @@ impl Parser {
     if selectors.len() == 1 {
       Ok(selectors.into_iter().next().unwrap())
     } else {
-      Ok(Query::Union(selectors))
+      Ok(Expression::Union(selectors))
     }
   }
 
-  fn parse_hierarchical_query(&mut self) -> Result<Query, Error> {
+  fn parse_hierarchical_query(&mut self) -> Result<Expression, Error> {
     let mut left = match self.token() {
       Some(Token::Greater) => {
         self.advance();
 
-        Query::Child {
-          parent: Box::new(Query::Current),
+        Expression::Child {
+          parent: Box::new(Expression::Current),
           child: Box::new(self.parse_postfix_query()?),
         }
       }
       Some(Token::Less) => {
         self.advance();
 
-        Query::Parent {
-          child: Box::new(Query::Current),
+        Expression::Parent {
+          child: Box::new(Expression::Current),
           parent: Box::new(self.parse_postfix_query()?),
         }
       }
@@ -75,7 +75,7 @@ impl Parser {
         Some(Token::Greater) => {
           self.advance();
 
-          left = Query::Child {
+          left = Expression::Child {
             parent: Box::new(left),
             child: Box::new(self.parse_postfix_query()?),
           };
@@ -83,7 +83,7 @@ impl Parser {
         Some(Token::Less) => {
           self.advance();
 
-          left = Query::Parent {
+          left = Expression::Parent {
             child: Box::new(left),
             parent: Box::new(self.parse_postfix_query()?),
           };
@@ -92,7 +92,7 @@ impl Parser {
         | Some(Token::Caret)
         | Some(Token::At)
         | Some(Token::LeftParen) => {
-          left = Query::Descendant {
+          left = Expression::Descendant {
             ancestor: Box::new(left),
             descendant: Box::new(self.parse_postfix_query()?),
           };
@@ -104,7 +104,7 @@ impl Parser {
     Ok(left)
   }
 
-  fn parse_postfix_query(&mut self) -> Result<Query> {
+  fn parse_postfix_query(&mut self) -> Result<Expression> {
     let mut query = self.parse_primary_query()?;
 
     while let Some(Token::LeftBracket) = self.token() {
@@ -122,7 +122,7 @@ impl Parser {
         None => return Err(Error::UnexpectedEnd),
       }
 
-      query = Query::Index {
+      query = Expression::Index {
         index,
         query: Box::new(query),
       };
@@ -131,17 +131,19 @@ impl Parser {
     Ok(query)
   }
 
-  fn parse_primary_query(&mut self) -> Result<Query> {
+  fn parse_primary_query(&mut self) -> Result<Expression> {
     match self.token() {
       Some(Token::Caret) => {
         self.advance();
-        Ok(Query::DirectChild(Box::new(self.parse_postfix_query()?)))
+        Ok(Expression::DirectChild(Box::new(
+          self.parse_postfix_query()?,
+        )))
       }
       Some(Token::At) => {
         self.advance();
 
         match self.advance() {
-          Some(Token::Number(position)) => Ok(Query::Position(position)),
+          Some(Token::Number(position)) => Ok(Expression::Position(position)),
           Some(_) => Err(Error::UnexpectedToken),
           None => Err(Error::UnexpectedEnd),
         }
@@ -150,7 +152,7 @@ impl Parser {
         let kind = kind.clone();
 
         self.advance();
-        Ok(Query::Kind(kind))
+        Ok(Expression::Kind(kind))
       }
       Some(Token::LeftParen) => {
         self.advance();
@@ -171,9 +173,9 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
-  use super::*;
+  use {super::*, crate::lexer::Lexer};
 
-  fn query(input: &str) -> Query {
+  fn query(input: &str) -> Expression {
     Parser::parse(Lexer::lex(input).unwrap()).unwrap()
   }
 
@@ -181,9 +183,9 @@ mod tests {
   fn child() {
     assert_eq!(
       query("object > string"),
-      Query::Child {
-        child: Box::new(Query::Kind("string".to_string())),
-        parent: Box::new(Query::Kind("object".to_string()))
+      Expression::Child {
+        child: Box::new(Expression::Kind("string".to_string())),
+        parent: Box::new(Expression::Kind("object".to_string()))
       }
     );
   }
@@ -192,9 +194,9 @@ mod tests {
   fn parent() {
     assert_eq!(
       query("string < object"),
-      Query::Parent {
-        child: Box::new(Query::Kind("string".to_string())),
-        parent: Box::new(Query::Kind("object".to_string()))
+      Expression::Parent {
+        child: Box::new(Expression::Kind("string".to_string())),
+        parent: Box::new(Expression::Kind("object".to_string()))
       }
     );
   }
@@ -203,9 +205,9 @@ mod tests {
   fn descendant() {
     assert_eq!(
       query("object string"),
-      Query::Descendant {
-        ancestor: Box::new(Query::Kind("object".to_string())),
-        descendant: Box::new(Query::Kind("string".to_string()))
+      Expression::Descendant {
+        ancestor: Box::new(Expression::Kind("object".to_string())),
+        descendant: Box::new(Expression::Kind("string".to_string()))
       }
     );
   }
@@ -214,7 +216,7 @@ mod tests {
   fn direct_child() {
     assert_eq!(
       query("^string"),
-      Query::DirectChild(Box::new(Query::Kind("string".to_string())))
+      Expression::DirectChild(Box::new(Expression::Kind("string".to_string())))
     );
   }
 
@@ -222,9 +224,9 @@ mod tests {
   fn index() {
     assert_eq!(
       query("string[2]"),
-      Query::Index {
+      Expression::Index {
         index: 2,
-        query: Box::new(Query::Kind("string".to_string())),
+        query: Box::new(Expression::Kind("string".to_string())),
       }
     );
   }
@@ -233,11 +235,11 @@ mod tests {
   fn index_grouped_query() {
     assert_eq!(
       query("(string, number)[1]"),
-      Query::Index {
+      Expression::Index {
         index: 1,
-        query: Box::new(Query::Union(vec![
-          Query::Kind("string".to_string()),
-          Query::Kind("number".to_string()),
+        query: Box::new(Expression::Union(vec![
+          Expression::Kind("string".to_string()),
+          Expression::Kind("number".to_string()),
         ])),
       }
     );
@@ -247,11 +249,11 @@ mod tests {
   fn index_hierarchical_query() {
     assert_eq!(
       query("(object > string)[0]"),
-      Query::Index {
+      Expression::Index {
         index: 0,
-        query: Box::new(Query::Child {
-          child: Box::new(Query::Kind("string".to_string())),
-          parent: Box::new(Query::Kind("object".to_string())),
+        query: Box::new(Expression::Child {
+          child: Box::new(Expression::Kind("string".to_string())),
+          parent: Box::new(Expression::Kind("object".to_string())),
         }),
       }
     );
@@ -259,21 +261,21 @@ mod tests {
 
   #[test]
   fn kind() {
-    assert_eq!(query("string"), Query::Kind("string".to_string()));
+    assert_eq!(query("string"), Expression::Kind("string".to_string()));
   }
 
   #[test]
   fn position() {
-    assert_eq!(query("@1"), Query::Position(1));
+    assert_eq!(query("@1"), Expression::Position(1));
   }
 
   #[test]
   fn union() {
     assert_eq!(
       query("string, number"),
-      Query::Union(vec![
-        Query::Kind("string".to_string()),
-        Query::Kind("number".to_string())
+      Expression::Union(vec![
+        Expression::Kind("string".to_string()),
+        Expression::Kind("number".to_string())
       ])
     );
   }
@@ -282,25 +284,25 @@ mod tests {
   fn union_query_with_descendant_and_direct_child() {
     assert_eq!(
       query("object > array[0] string @ 2, ^number > boolean"),
-      Query::Union(vec![
-        Query::Descendant {
-          ancestor: Box::new(Query::Descendant {
-            ancestor: Box::new(Query::Child {
-              parent: Box::new(Query::Kind("object".to_string())),
-              child: Box::new(Query::Index {
+      Expression::Union(vec![
+        Expression::Descendant {
+          ancestor: Box::new(Expression::Descendant {
+            ancestor: Box::new(Expression::Child {
+              parent: Box::new(Expression::Kind("object".to_string())),
+              child: Box::new(Expression::Index {
                 index: 0,
-                query: Box::new(Query::Kind("array".to_string())),
+                query: Box::new(Expression::Kind("array".to_string())),
               }),
             }),
-            descendant: Box::new(Query::Kind("string".to_string())),
+            descendant: Box::new(Expression::Kind("string".to_string())),
           }),
-          descendant: Box::new(Query::Position(2)),
+          descendant: Box::new(Expression::Position(2)),
         },
-        Query::Child {
-          parent: Box::new(Query::DirectChild(Box::new(Query::Kind(
-            "number".to_string()
-          )))),
-          child: Box::new(Query::Kind("boolean".to_string())),
+        Expression::Child {
+          parent: Box::new(Expression::DirectChild(Box::new(
+            Expression::Kind("number".to_string())
+          ))),
+          child: Box::new(Expression::Kind("boolean".to_string())),
         },
       ])
     );
@@ -310,9 +312,9 @@ mod tests {
   fn child_with_implicit_current() {
     assert_eq!(
       query("> string"),
-      Query::Child {
-        parent: Box::new(Query::Current),
-        child: Box::new(Query::Kind("string".to_string()))
+      Expression::Child {
+        parent: Box::new(Expression::Current),
+        child: Box::new(Expression::Kind("string".to_string()))
       }
     );
   }
@@ -321,9 +323,9 @@ mod tests {
   fn parent_with_implicit_current() {
     assert_eq!(
       query("< object"),
-      Query::Parent {
-        child: Box::new(Query::Current),
-        parent: Box::new(Query::Kind("object".to_string()))
+      Expression::Parent {
+        child: Box::new(Expression::Current),
+        parent: Box::new(Expression::Kind("object".to_string()))
       }
     );
   }
