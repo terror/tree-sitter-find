@@ -6,7 +6,9 @@ pub(crate) enum Token {
   Greater,
   Kind(String),
   LeftBracket,
+  LeftParen,
   Less,
   Number(usize),
   RightBracket,
+  RightParen,
 }
