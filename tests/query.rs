@@ -19,7 +19,7 @@ fn compiled_query_can_be_reused() {
 
   for input in ["fn first() {}", "fn second() {}"] {
     let tree = tree(input);
-    let nodes = query.execute(&tree.root_node());
+    let nodes = tree.root_node().find(&query).unwrap();
 
     assert_eq!(nodes.len(), 1);
     assert_eq!(nodes[0].utf8_text(input.as_bytes()).unwrap(), input);
