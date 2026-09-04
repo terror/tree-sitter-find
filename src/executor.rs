@@ -56,19 +56,7 @@ impl Executor {
   }
 
   fn direct_child<'a>(node: &Node<'a>, inner: &Query) -> Vec<Node<'a>> {
-    let mut results = Vec::new();
-
-    for i in 0..Self::child_count(node) {
-      if let Some(child) = node.child(i) {
-        let child_results = Self::execute(&child, inner);
-
-        if !child_results.is_empty() && child_results[0] == child {
-          results.push(child);
-        }
-      }
-    }
-
-    results
+    Self::direct_children(node, inner)
   }
 
   fn index<'a>(node: &Node<'a>, kind: &str, index: usize) -> Vec<Node<'a>> {
@@ -138,7 +126,7 @@ impl Executor {
       results.extend(Self::execute(node, selector));
     }
 
-    Self::deduplicate_and_sort(results)
+    results
   }
 
   fn deduplicate_and_sort<'a>(mut nodes: Vec<Node<'a>>) -> Vec<Node<'a>> {
@@ -152,6 +140,15 @@ impl Executor {
   }
 
   fn direct_children<'a>(node: &Node<'a>, selector: &Query) -> Vec<Node<'a>> {
+    if let Query::Index { kind, index } = selector {
+      return (0..Self::child_count(node))
+        .filter_map(|position| node.child(position))
+        .filter(|child| child.kind() == kind)
+        .nth(*index)
+        .into_iter()
+        .collect();
+    }
+
     let mut results = Vec::new();
 
     for i in 0..Self::child_count(node) {
@@ -258,6 +255,26 @@ mod tests {
   }
 
   #[test]
+  fn query_direct_child_by_index() {
+    let program = indoc! {"
+      fn first() {}
+      fn second() {}
+    "};
+
+    let tree = tree(program);
+
+    for query in ["^function_item[1]", "source_file > function_item[1]"] {
+      let nodes = Executor::execute(&tree.root_node(), &parse(query));
+
+      assert_eq!(nodes.len(), 1);
+      assert_eq!(
+        nodes[0].utf8_text(program.as_bytes()).unwrap(),
+        "fn second() {}"
+      );
+    }
+  }
+
+  #[test]
   fn query_parent() {
     let program = indoc! {"
       fn main() {
@@ -334,5 +351,24 @@ mod tests {
 
     assert_eq!(nodes.len(), 1);
     assert_eq!(nodes[0].kind(), "block");
+  }
+
+  #[test]
+  fn query_union_preserves_selector_order() {
+    let program = indoc! {"
+      const VALUE: usize = 0;
+      fn first() {}
+      fn second() {}
+    "};
+
+    let tree = tree(program);
+
+    let nodes =
+      Executor::execute(&tree.root_node(), &parse("function_item, const_item"));
+
+    assert_eq!(
+      nodes.iter().map(Node::kind).collect::<Vec<_>>(),
+      ["function_item", "function_item", "const_item"]
+    );
   }
 }
